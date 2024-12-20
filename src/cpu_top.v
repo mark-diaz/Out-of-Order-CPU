@@ -4,7 +4,9 @@ module cpu_top
     input reset_n
 );
   	wire [31:0] instruction_fetch;
+	
 	wire stall;
+	assign stall = 0; // stalls will be added with branch predictor
 
     // Instantiate Fetch Unit
     fetch fetch_unit (
@@ -12,16 +14,18 @@ module cpu_top
         .reset_n(reset_n),
       	.instruction(instruction_fetch)
     );
+
     wire [31:0] instruction_fetch_pipelined;
 
-    pipeline_buffer IF_ID_buffer (
+    pipeline_buffer #(.WIDTH(32)) IF_ID_BUFFER_32_BIT (
         .clk(clk),
         .reset_n(reset_n),
-		  .stall(stall),
+		.stall(stall),
         .data_in(instruction_fetch),
         .data_out(instruction_fetch_pipelined)
     );
 
+	// instruction fields
     wire [31:0] instruction;
     wire [4:0] rs1;
     wire [4:0] rs2;
@@ -30,6 +34,13 @@ module cpu_top
     wire [2:0] funct3;
     wire [6:0] opcode;
 
+	// memory checks
+    wire is_load;
+    wire is_store;
+    wire is_byte;
+    wire is_word;
+	wire valid_instruction;
+
     decode decode_unit (
         .instruction(instruction_fetch_pipelined),
         .rs1(rs1),
@@ -37,37 +48,25 @@ module cpu_top
         .rd(rd),
         .funct7(funct7),
         .funct3(funct3),
-        .opcode(opcode)
-    );
-	 
-    wire is_load;
-    wire is_store;
-    wire is_byte;
-    wire is_word;
-	wire is_instr;
-
-    // Instance of check_mem_instr
-    check_mem_instr check_mem_unit_inst (
         .opcode(opcode),
+		.opcode(opcode),
         .funct3(funct3),
         .is_load(is_load),
         .is_store(is_store),
         .is_byte(is_byte),
         .is_word(is_word),
-		.is_instr(is_instr)
+		.valid_instruction(valid_instruction)
     );
 	 
-	 wire is_mem = is_load | is_store;
+	wire is_mem = is_load | is_store;
 	 
-	//immeditae gen and control signals to be done after the issue queue
-	
     wire [31:0] immediate;
-
     immediate_generate imm_gen (
         .instruction(instruction_fetch_pipelined),
         .immediate(immediate)
     );
 	 
+	// Rename
 	wire [5:0] phys_rd, phys_rs1, phys_rs2;
 	wire free_list_empty, rename_valid;
 	wire retire = 1'b0;
@@ -75,26 +74,27 @@ module cpu_top
 	wire [5:0] old_phys_rd;
 	wire [4:0] arch_reg;
 	
-	//complete and retire wires:
-	reg complete_valid0;
-	reg complete_valid1;
-	reg complete_valid2;
-	reg complete_valid3;
-	wire [31:0] result0_pipe;
-	wire [31:0] result1_pipe;
-	wire [31:0] result2_pipe;
-	wire [5:0] dest_reg0_pipe;
-	wire [5:0] dest_reg1_pipe;
-	wire [5:0] dest_reg2_pipe;
-	wire regWrite0_pipe;
-	wire regWrite1_pipe;
-	wire regWrite2_pipe;
-	wire [5:0] rob_index0_pipe;
-	wire [5:0] rob_index1_pipe;
-	wire [5:0] rob_index2_pipe;
+	rename rename_module (
+        .rd(rd),
+        .rs1(rs1),
+        .rs2(rs2),
+        .issue_valid(valid_instruction),
+        .reset_n(reset_n),
+        .clk(clk),
+        .retire_valid1(commit_valid_1), //fill in later  
+        .retire_phys_reg1(free_oldDest_1), //later
+		.retire_valid2(commit_valid_2),  //later
+        .retire_phys_reg2(free_oldDest_2), //later
+		.isStore(is_store),
+        .phys_rd(phys_rd),
+        .phys_rs1(phys_rs1),
+        .phys_rs2(phys_rs2),
+		.arch_reg(arch_reg),
+        .old_phys_rd(old_phys_rd),
+        .free_list_empty(free_list_empty)
+    );
 	
-	//rob outputs
-	
+	//rob outputs: reg file inputs
 	wire [5:0] rob_entry_num;
 	wire alloc_ready;
 	wire commit_valid_1;
@@ -111,28 +111,7 @@ module cpu_top
 	wire forward_rs2_valid;
 	wire [31:0] rob_forward_data_rs1;
 	wire [31:0] rob_forward_data_rs2;
-	
-	rename rename_module (
-        .rd(rd),
-        .rs1(rs1),
-        .rs2(rs2),
-        .issue_valid(is_instr),
-        .reset_n(reset_n),
-        .clk(clk),
-        .retire_valid1(commit_valid_1), //fill in later  
-        .retire_phys_reg1(free_oldDest_1), //later
-		.retire_valid2(commit_valid_2),  //later
-        .retire_phys_reg2(free_oldDest_2), //later
-		.isStore(is_store),
-        .phys_rd(phys_rd),
-        .phys_rs1(phys_rs1),
-        .phys_rs2(phys_rs2),
-		.arch_reg(arch_reg),
-        .old_phys_rd(old_phys_rd),
-        .free_list_empty(free_list_empty)
-    );
 
-	wire rob_open = 1'b1;
 	wire [31:0] rs1_data, rs2_data;
 
 	reg_file architectural_register_file (
@@ -144,8 +123,8 @@ module cpu_top
 		.rd1_data(commit_value_1), //later
 		.rd2(commit_archDest_2),           //later
       	.rd2_data(commit_value_2),   //later
-		.RegWrite1(commit_valid_1),  //later
-		.RegWrite2(commit_valid_2),		//later
+		.regWrite1(commit_valid_1),  //later
+		.regWrite2(commit_valid_2),		//later
 		.rs1_data(rs1_data),
 		.rs2_data(rs2_data)
 	);
@@ -161,7 +140,7 @@ module cpu_top
     wire funct2_enable;
     wire issue_queue_full;
 	 
-	 wire prev_write = (regWrite2_pipe | regWrite1_pipe | regWrite0_pipe);
+	wire prev_write = (regWrite2_pipe | regWrite1_pipe | regWrite0_pipe);
 	 
 	//ls unit outputs
     wire [31:0] load_data;
@@ -170,20 +149,21 @@ module cpu_top
     wire fwd_enable_ls;
 	 
 	//inputs for forward iq
-	reg [5:0] fwd_dest0;
-	reg [5:0] fwd_dest1;
-	reg [5:0] fwd_dest2;
-	reg [5:0] fwd_dest_mem;
-	reg [31:0] fwd_val0;
-	reg [31:0] fwd_val1;
-	reg [31:0] fwd_val2;
-	reg [31:0] fwd_val_mem;
-	reg fwd_double;
+	wire [5:0] fwd_dest0;
+	wire [31:0] fwd_val0;
+
+	wire [5:0] fwd_dest1;
+	wire [31:0] fwd_val1;
+
+	wire [5:0] fwd_dest2;
+	wire [31:0] fwd_val2;
+
+	wire fwd_double;
 
 	issue_queue issue_queue_inst(
     	.clk(clk),
     	.reset_n(reset_n),
-    	.write_enable(is_instr), // reg read valid
+    	.write_enable(valid_instruction), // reg read valid
     
     // rename stage: source and destination regs
     	.phys_rd(phys_rd),
@@ -219,19 +199,36 @@ module cpu_top
 		.fwd_rs2_enable(forward_rs2_valid),
 		.fwd_rs1_val(rob_forward_data_rs1),
 		.fwd_rs2_val(rob_forward_data_rs2)
-
 );
 
-	 
-	 reorder_buffer rob(
+
+	//ROB Complete and retire wires:
+	wire complete_valid0;
+	wire complete_valid1;
+	wire complete_valid2;
+	wire [31:0] result0_pipe;
+	wire [31:0] result1_pipe;
+	wire [31:0] result2_pipe;
+	wire [5:0] dest_reg0_pipe;
+	wire [5:0] dest_reg1_pipe;
+	wire [5:0] dest_reg2_pipe;
+	wire regWrite0_pipe;
+	wire regWrite1_pipe;
+	wire regWrite2_pipe;
+	wire [5:0] rob_index0_pipe;
+	wire [5:0] rob_index1_pipe;
+	wire [5:0] rob_index2_pipe;
+	wire rob_open = 1'b1;
+
+	reorder_buffer rob(
 		.clk(clk),
 		.reset_n(reset_n),
-		.alloc_valid(is_instr), //regwrite signal used
+		.alloc_valid(valid_instruction), //regwrite signal used
 		.alloc_dest(phys_rd),
 		.alloc_oldDest(old_phys_rd), //rd
 		.alloc_archDest(arch_reg),
 		.rob_entry_num(rob_entry_num),
-		.alloc_instr_addr(31'b0), //not using
+		.alloc_instr_addr(32'd0), //not using
 		.writeback_valid1(complete_valid0),
 		.writeback_valid2(complete_valid1), 
 		.writeback_valid3(complete_valid2), 
@@ -246,7 +243,7 @@ module cpu_top
 		.writeback_value4(load_data), //
 		.commit_valid_1(commit_valid_1),
 		.commit_valid_2(commit_valid_2),
-      	.commit_dest_1(commit_dest_1),
+		.commit_dest_1(commit_dest_1),
 		.commit_archDest_1(commit_archDest_1),
 		.free_oldDest_1(free_oldDest_1),
 		.commit_value_1(commit_value_1),
@@ -263,9 +260,8 @@ module cpu_top
 		.rob_forward_data_rs2(rob_forward_data_rs2),
 		.alloc_ready(rob_open)
 	);
-	  assign stall = 0;//stall | free_list_empty | (!rob_open);
 	 
-	 // Functional units
+	// Functional units
     wire [31:0] result0, result1, result2;
     wire zero_flag0, zero_flag1, zero_flag2;
     wire [5:0] dest_reg0, dest_reg1, dest_reg2;
@@ -318,11 +314,9 @@ module cpu_top
         .regWrite(regWrite2)
     );
 	 
-	 
 	wire [242:0] combined_data_out;
 	  
-
-    pipeline_buffer_execute EX_MEM_buffer (
+    pipeline_buffer #(.WIDTH(243)) EX_MEM_buffer (
     .clk(clk),
     .reset_n(reset_n),
     .stall(stall),
@@ -363,8 +357,6 @@ module cpu_top
 	wire memSize2_pipe = combined_data_out[1];
 	assign regWrite2_pipe = combined_data_out[0];
 	  
-	  
-
 	wire [1:0] instruction_type;
 	assign instruction_type = (is_load && is_word) ? 2'b00 :   // LW
 				(is_load && is_byte) ? 2'b01 :   // LB
@@ -382,68 +374,39 @@ module cpu_top
 	assign result2_pipe = combined_data_out[48:17];
 	assign dest_reg2_pipe = combined_data_out[15:10];
 
-    
+	wire mem0;
+	wire mem1;
+	wire mem2;
 
-	reg mem0;
-	reg mem1;
-	reg mem2;
-	always @(*) begin
-		complete_valid0 = 1'b0;
-		complete_valid1 = 1'b0;
-		complete_valid2 = 1'b0;
-		fwd_double = 1'b0;
-		mem0 = 1'b0;
-		mem1 = 1'b0;
-		mem2 = 1'b0;
-		fwd_dest0 = 6'b0;
-		fwd_val0 = 32'b0;
-		fwd_dest1 = 6'b0;
-		fwd_val1 = 32'b0;
-		fwd_dest2 = 6'b0;
-		fwd_val2 = 32'b0;
-			
-		if (memWrite0_pipe || memRead0_pipe) begin
-			mem0 = 1'b1;
-			fwd_dest0 = dest_reg0_pipe;
-			fwd_double = 1'b1;
+	// Memory access signals
+	assign mem0 = memWrite0_pipe || memRead0_pipe;
+	assign mem1 = memWrite1_pipe || memRead1_pipe;
+	assign mem2 = memWrite2_pipe || memRead2_pipe;
 
-			fwd_val0 = 32'b0;
+	// Forwarding signals
+	assign fwd_dest0 = mem0 ? dest_reg0_pipe : (regWrite0_pipe ? dest_reg0_pipe : 6'b0);
+	assign fwd_val0 = mem0 ? 32'd0 : (regWrite0_pipe ? result0_pipe : 32'd0);
+	assign fwd_dest1 = mem1 ? dest_reg1_pipe : (regWrite1_pipe ? dest_reg1_pipe : 6'b0);
+	assign fwd_val1 = mem1 ? 32'd0 : (regWrite1_pipe ? result1_pipe : 32'd0);
+	assign fwd_dest2 = mem2 ? dest_reg2_pipe : (regWrite2_pipe ? dest_reg2_pipe : 6'b0);
+	assign fwd_val2 = mem2 ? 32'd0 : (regWrite2_pipe ? result2_pipe : 32'd0);
 
-		end else if (regWrite0_pipe) begin
-			fwd_dest0 = dest_reg0_pipe;
-			fwd_val0 = result0_pipe;
-			complete_valid0 = 1'b1;
-		end
-		if (memWrite1_pipe || memRead1_pipe) begin
-			mem1 = 1'b1;
-			fwd_dest1 = dest_reg1_pipe;
-			fwd_double = 1'b1;
-			fwd_val1 = 32'b0;
-		end else if (regWrite1_pipe) begin
-			complete_valid1 = 1'b1;
-			fwd_dest1 = dest_reg1_pipe;
-			fwd_val1 = result1_pipe;
-		end
-		if (memWrite2_pipe || memRead2_pipe) begin
-			mem2 = 1'b1;
-			fwd_dest2 = dest_reg2_pipe;
-			fwd_double = 1'b1;
-			fwd_val2 = 32'b0;
-		end else if (regWrite2_pipe) begin
-			complete_valid2 = 1'b1;
-			fwd_dest2 = dest_reg2_pipe;
-			fwd_val2 = result2_pipe;
-		end
-	end
+	// Completion signals
+	assign complete_valid0 = regWrite0_pipe && !mem0;
+	assign complete_valid1 = regWrite1_pipe && !mem1;
+	assign complete_valid2 = regWrite2_pipe && !mem2;
+
+	// Forwarding double signal
+	assign fwd_double = mem0 || mem1 || mem2;
 	  
-	  // Instantiate Load-Store Unit
-    ls_unit lsu_inst (
+	// Instantiate Load-Store Unit
+    load_store load_store_inst (
         .clk(clk),
         .reset_n(reset_n),
 			
 		.load_store_enable(is_load || is_store),
         // Decode stage inputs
-		  .instruction_type(instruction_type),
+		.instruction_type(instruction_type),
         .phys_rd(phys_rd),
         .rob_entry(rob_entry_num),
 

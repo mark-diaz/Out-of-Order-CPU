@@ -17,7 +17,7 @@ module ALU(
             4'b0001: Result = A | B;       // Bitwise OR
             4'b0011: Result = A ^ B;       // Bitwise XOR
             4'b0111: Result = A >>> B[4:0]; // Arithmetic Shift Right
-				4'b1000: Result = B;
+			4'b1000: Result = B;
             default: Result = 32'b0;       // Default case (invalid operation)
         endcase
     end

@@ -7,38 +7,19 @@ module immediate_generate (
     parameter I_TYPE = 7'b0010011;
     parameter S_TYPE = 7'b0100011;
     parameter U_TYPE = 7'b0110111;
-	parameter LW_TYPE = 7'b0000011;
+	parameter L_TYPE = 7'b0000011;
     
     wire [6:0] opcode = instruction[6:0];
 
     always @(*) begin
         case (opcode)
-            R_TYPE: 
-                begin
-                    immediate[31:0] = 32'd0;
-                end
-            I_TYPE: 
-                begin
-                    immediate = { { 20{instruction[31]} }, instruction[31:20]}; // sign-extend MSB
-                end
-			LW_TYPE:
-                begin
-                    immediate = { { 20{instruction[31]} }, instruction[31:20]}; // sign-extend
-                end
-            S_TYPE: 
-                begin
-                    immediate = { {20{ instruction[31]} } , instruction[31:25], instruction[11:7]}; // sign-extend MSB
-                end
-            U_TYPE: 
-                begin
-                    immediate = { instruction[31:12], 12'd0}; // zero-extend the remaining bits
-                end
-            default:
-                begin
-                    immediate[31:0] = 32'd0;
-                end
+            R_TYPE: immediate[31:0] = 32'd0;
+            I_TYPE: immediate = { { 20{instruction[31]} }, instruction[31:20]}; // sign-extend MSB
+			L_TYPE: immediate = { { 20{instruction[31]} }, instruction[31:20]}; // sign-extend
+            S_TYPE: immediate = { {20{ instruction[31]} } , instruction[31:25], instruction[11:7]}; // sign-extend MSB
+            U_TYPE: immediate = { instruction[31:12], 12'd0}; // zero-extend the remaining bits
+            default: immediate[31:0] = 32'd0;
         endcase
-
     end
 
 endmodule

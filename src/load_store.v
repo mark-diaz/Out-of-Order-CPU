@@ -1,4 +1,4 @@
-module ls_unit (
+module load_store (
     input clk,
     input reset_n,
 
@@ -21,11 +21,6 @@ module ls_unit (
     input [31:0] address_funct2,
     input [31:0] store_data2,
     input [5:0] ROB_entry_num_funct2,
-	 
-	 //input retire_enable1,
-	 //input retire_enable2,
-	 //input [5:0] rob_entry_retire1,
-	 //input 5:0] rob_entry_retire2,
 
     // wake up issue queue //can also be used for ROB
     output reg fwd_enable,
@@ -144,8 +139,6 @@ module ls_unit (
 
     integer current_index;
     // forward from LSQ or memory
-
-
     always @(posedge clk or negedge reset_n) begin
         if (!reset_n) begin
             for (i = 0; i < NUM_INSTRUCTIONS; i = i + 1) begin
@@ -173,7 +166,6 @@ module ls_unit (
             // create entry from decoded instruction
             if (load_store_enable) begin
                 
-					 
                 // create entry on decode but wait for computed offset
                 load_store_queue[new_entry] <= {
                     instruction_type,
@@ -181,9 +173,10 @@ module ls_unit (
                     rob_entry,
                     64'b0
                 };
-					 load_store_valid[new_entry] <= 1'b1;
+				
+                load_store_valid[new_entry] <= 1'b1;
                 // set entry next in queue
-                new_entry <= (new_entry + 1)%NUM_INSTRUCTIONS;
+                new_entry <= (new_entry + 1) % NUM_INSTRUCTIONS;
             end
 
             // update issue queue entry with address computed and value
@@ -203,55 +196,58 @@ module ls_unit (
 
             // clear fwd_enable
             fwd_enable <= 1'b0;
-				enable_ROB <= 1'b0;
-				load_data <=32'b0;
-				fwd_phys_rd <= 6'b0;
+            enable_ROB <= 1'b0;
+            load_data <=32'b0;
+            fwd_phys_rd <= 6'b0;
 
-				
-				
-				LSQ_found = 1'b0;
-				found_load = 1'b0;
-				LSQ_found_index = INVALID_ENTRY;
-				
-				//find first load
-				for(j=0;j<new_entry;j=j+1)begin
-				
-			  // iterator starts at most recent entry in the load store queue
-				  current_index = (j == 0) ? NUM_INSTRUCTIONS-1 : j -1;
+            
+            LSQ_found = 1'b0;
+            found_load = 1'b0;
+            LSQ_found_index = INVALID_ENTRY;
+            
+            //find first load
+            for (j = 0; j < new_entry; j = j + 1) begin
+                
+                // iterator starts at most recent entry in the load store queue
+                current_index = (j == 0) ? NUM_INSTRUCTIONS-1 : j -1;
 
-				  if (found_load == 1'b0 && load_store_ready[j] == 1'b1 && load_store_queue[j][77] == 1'b0 && load_store_valid[j] == 1'b1) begin
-						for (i = 0; i < NUM_INSTRUCTIONS; i = i + 1) begin
-							 if (load_store_queue[j][77] == 1'b0 && load_store_queue[j][63:32] == load_store_queue[current_index][63:32] && load_store_queue[current_index][77] == 1'b1 && !LSQ_found) begin
-								  LSQ_found = 1'b1;
-								  LSQ_found_index = current_index;
-							 end
-						// wrap around when at 0
-						current_index = (current_index == 0) ? NUM_INSTRUCTIONS -1: current_index-1;
-						end
-						if(load_store_queue[j][77] == 1'b0) begin 
-							if (LSQ_found) begin
-								 fwd_enable <= 1'b1;
-								 enable_ROB <= 1'b1;
-								 fwd_phys_rd <= load_store_queue[j][75:70];
-								 if(load_store_queue[j][76] == 1'b0) begin 
-										load_data <= load_store_queue[LSQ_found_index][31:0];
-										$display("load data: %x",load_store_queue[LSQ_found_index][31:0]);
-								 end else begin
-										load_data <= { 24'b0, load_store_queue[LSQ_found_index][7:0]};
-								 end
-								 rob_entry_num_retire <= load_store_queue[j][69:64];
-								 
-								 load_store_valid[j] <= 1'b0;
-							end 
-						end
-						found_load = 1'b1;
-				  end
-			  end
+                if (found_load == 1'b0 && load_store_ready[j] == 1'b1 && load_store_queue[j][77] == 1'b0 && load_store_valid[j] == 1'b1) begin
+                    
+                    for (i = 0; i < NUM_INSTRUCTIONS; i = i + 1) begin
+                        if (load_store_queue[j][77] == 1'b0 && load_store_queue[j][63:32] == load_store_queue[current_index][63:32] && load_store_queue[current_index][77] == 1'b1 && !LSQ_found) begin
+                            LSQ_found = 1'b1;
+                            LSQ_found_index = current_index;
+                        end
+                        // wrap around when at 0
+                        current_index = (current_index == 0) ? NUM_INSTRUCTIONS -1: current_index-1;
+                    end
 
-				// handle memory reads and writes
-			if (load_store_valid[head_entry] ==1'b0 && load_store_ready[head_entry] == 1'b1) begin
-				head_entry <= (head_entry + 1) % NUM_INSTRUCTIONS;
-			end 
+                    if(load_store_queue[j][77] == 1'b0) begin 
+                        if (LSQ_found) begin
+                            fwd_enable <= 1'b1;
+                            enable_ROB <= 1'b1;
+                            fwd_phys_rd <= load_store_queue[j][75:70];
+                            
+                            if(load_store_queue[j][76] == 1'b0) begin 
+                                load_data <= load_store_queue[LSQ_found_index][31:0];
+                                $display("load data: %x",load_store_queue[LSQ_found_index][31:0]);
+                            end 
+                            else begin
+                                load_data <= { 24'b0, load_store_queue[LSQ_found_index][7:0]};
+                            end
+                            rob_entry_num_retire <= load_store_queue[j][69:64];
+                            load_store_valid[j] <= 1'b0;
+                        end 
+                    end
+                    
+                    found_load = 1'b1;
+                end
+            end
+
+            // handle memory reads and writes
+            if (load_store_valid[head_entry] ==1'b0 && load_store_ready[head_entry] == 1'b1) begin
+                head_entry <= (head_entry + 1) % NUM_INSTRUCTIONS;
+            end 
             else begin
                 if (load_store_ready[head_entry] == 1'b1) begin
                     case (load_store_queue[head_entry][77:76])
@@ -274,11 +270,11 @@ module ls_unit (
                                 fwd_phys_rd <= load_store_queue[head_entry][75:70];
                                 load_data <= read_value;
 
-                                // enable rob: TODO: make sure it works
-                                        enable_ROB <= 1'b1;
-                                        //use forward value
-                                        rob_entry_num_retire <= load_store_queue[head_entry][69:64];
-                                        load_store_valid[head_entry] <= 1'b0;
+                                // enable rob: 
+                                enable_ROB <= 1'b1;
+                                //use forward value
+                                rob_entry_num_retire <= load_store_queue[head_entry][69:64];
+                                load_store_valid[head_entry] <= 1'b0;
                                 head_entry <= (head_entry + 1) % NUM_INSTRUCTIONS;  //may have separare retire loop, also set valid to 0
                             end
                         end
@@ -301,9 +297,9 @@ module ls_unit (
                                 fwd_phys_rd <= load_store_queue[head_entry][75:70];
                                 load_data <= { 24'b0, read_value[7:0] };
                                         
-                                        enable_ROB <= 1'b1;
-                                        rob_entry_num_retire <= load_store_queue[head_entry][69:64];
-                                        load_store_valid[head_entry] <= 1'b0;
+                                enable_ROB <= 1'b1;
+                                rob_entry_num_retire <= load_store_queue[head_entry][69:64];
+                                load_store_valid[head_entry] <= 1'b0;
                                 head_entry <= (head_entry + 1) % NUM_INSTRUCTIONS;
                             end 
                         end
@@ -320,10 +316,10 @@ module ls_unit (
                             else if (write_valid) begin    
                                     
                                 mem_op_in_progress <= 1'b0;
-                                        write_enable <= 1'b0;
-                                        enable_ROB <= 1'b1;
-                                        rob_entry_num_retire <= load_store_queue[head_entry][69:64];
-                                        load_store_valid[head_entry] <= 1'b0;
+                                write_enable <= 1'b0;
+                                enable_ROB <= 1'b1;
+                                rob_entry_num_retire <= load_store_queue[head_entry][69:64];
+                                load_store_valid[head_entry] <= 1'b0;
                                 head_entry <= (head_entry + 1) % NUM_INSTRUCTIONS;
                             end
                         end
@@ -338,16 +334,16 @@ module ls_unit (
                             end
                             else if (write_valid) begin
                                 mem_op_in_progress <= 1'b0;
-                                        write_enable <= 1'b0;
-                                        enable_ROB <= 1'b1;
-                                        rob_entry_num_retire <= load_store_queue[head_entry][69:64];
-                                        load_store_valid[head_entry] <= 1'b0;
+                                write_enable <= 1'b0;
+                                enable_ROB <= 1'b1;
+                                rob_entry_num_retire <= load_store_queue[head_entry][69:64];
+                                load_store_valid[head_entry] <= 1'b0;
                                 head_entry <= (head_entry + 1) % NUM_INSTRUCTIONS;
                             end
                         end
                     endcase
                 end
-			end
+            end
         end
     end
 

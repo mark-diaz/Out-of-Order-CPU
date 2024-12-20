@@ -5,6 +5,7 @@
 *.swp
 *.swo
 *~
+*.out
 
 # Verilog/HDL-specific
 *.vcd

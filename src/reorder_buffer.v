@@ -31,8 +31,6 @@ module reorder_buffer(
     output reg forward_rs2_valid,
     output reg [31:0] rob_forward_data_rs1,
     output reg [31:0] rob_forward_data_rs2,
-    //output reg 5:0] rob_retire_entry_1,
-    //output reg 5:0] rob_retire_entry_2,
     output reg commit_valid_1, // Overall commit status
     output reg commit_valid_2,
     output reg [5:0] commit_dest_1,
@@ -94,7 +92,6 @@ module reorder_buffer(
             end
         end
 
-
         // Commit logic (up to 2)
         if (commit_ready && rob_valid[head] && rob_result_ready[head]) begin
             commit_valid_1 = 1;
@@ -102,7 +99,6 @@ module reorder_buffer(
             free_oldDest_1 = rob_oldDest[head];
             commit_value_1 = rob_value[head];
             commit_archDest_1 = rob_archDest[head];
-            //rob_retire_entry_1 = head;
 
             // Check second instruction
             if (rob_valid[(head + 1) % 64] && rob_result_ready[(head + 1) % 64]) begin
@@ -111,7 +107,6 @@ module reorder_buffer(
                 free_oldDest_2 = rob_oldDest[(head + 1) % 64];
                 commit_value_2 = rob_value[(head + 1) % 64];
                 commit_archDest_2 = rob_archDest[(head + 1) % 64];
-                //rob_retire_entry_2 = (head + 1) % 64;
             end
         end
     end
@@ -145,38 +140,37 @@ module reorder_buffer(
                 tail <= (tail + 1) % 64;
             end
 				
-
             // Writeback
             if (writeback_valid1) begin          //changing to use rob_index not dest reg could also change all of the writebacks
                 if (rob_valid[writeback_idx1] ) begin
                     rob_result_ready[writeback_idx1] <= 1;
                     rob_value[writeback_idx1] <= writeback_value1;
                 end
-				end
-				if (writeback_valid2) begin          //changing to use rob_index not dest reg could also change all of the writebacks
-                    if (rob_valid[writeback_idx2] ) begin
-                        rob_result_ready[writeback_idx2] <= 1;
-                        rob_value[writeback_idx2] <= writeback_value2;
-                    end
-				end
+			end
 
-				if (writeback_valid3) begin          //changing to use rob_index not dest reg could also change all of the writebacks
-                    if (rob_valid[writeback_idx3] ) begin
-                        rob_result_ready[writeback_idx3] <= 1;
-                        rob_value[writeback_idx3] <= writeback_value3;
-                    end
-				end
+            if (writeback_valid2) begin          //changing to use rob_index not dest reg could also change all of the writebacks
+                if (rob_valid[writeback_idx2] ) begin
+                    rob_result_ready[writeback_idx2] <= 1;
+                    rob_value[writeback_idx2] <= writeback_value2;
+                end
+            end
 
-				if (writeback_valid4) begin          //changing to use rob_index not dest reg could also change all of the writebacks
-                    if (rob_valid[writeback_idx4] ) begin
-                        rob_result_ready[writeback_idx4] <= 1;
-                        rob_value[writeback_idx4] <= writeback_value4;
-                    end
-				end
+            if (writeback_valid3) begin          //changing to use rob_index not dest reg could also change all of the writebacks
+                if (rob_valid[writeback_idx3] ) begin
+                    rob_result_ready[writeback_idx3] <= 1;
+                    rob_value[writeback_idx3] <= writeback_value3;
+                end
+            end
+
+            if (writeback_valid4) begin          //changing to use rob_index not dest reg could also change all of the writebacks
+                if (rob_valid[writeback_idx4] ) begin
+                    rob_result_ready[writeback_idx4] <= 1;
+                    rob_value[writeback_idx4] <= writeback_value4;
+                end
+            end
 
             // Commit up to two instructions
             if (prev_commit_ready && rob_valid[head] && rob_result_ready[head]) begin
-
                 rob_valid[head] <= 0;
                 
                 // Check and commit second instruction

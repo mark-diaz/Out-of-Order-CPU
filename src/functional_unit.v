@@ -71,35 +71,16 @@ module functional_unit(
         .Zero(zero)
     );
 
-    // Process Results and Outputs
-    always @(*) begin
-		 if (enable) begin
-            result = alu_result;
-            zero_flag = zero;
-            dest_reg = phys_rd;
-            rob_index = ROB_entry_index;
-            if (MemWrite)begin
-                store_data = phys_rs2_val;
-            end else begin
-                store_data = 'd0;
-            end
-            
-            memWrite = MemWrite;
-            memRead = MemRead;
-            memSize= MemSize;
-            regWrite = RegWrite;
-        end 
-        else begin
-            result = 'd0;
-            zero_flag = 'd0;
-            dest_reg = 'd0;
-            rob_index = 'd0;
-            store_data = 'd0;
-            memWrite = 'd0;
-            memRead = 'd0;
-            memSize= 'd0;
-            regWrite = 'd0;
-        end
-    end
+    // Conditional assignments based on 'enable' signal
+    assign result = (enable) ? alu_result : 32'd0;
+    assign zero_flag = (enable) ? zero : 1'b0;
+    assign dest_reg = (enable) ? phys_rd : 5'd0;
+    assign rob_index = (enable) ? ROB_entry_index : 32'd0;
+    assign store_data = (enable && MemWrite) ? phys_rs2_val : 32'd0;
+
+    assign memWrite = (enable) ? MemWrite : 1'b0;
+    assign memRead = (enable) ? MemRead : 1'b0;
+    assign memSize = (enable) ? MemSize : 3'd0;
+    assign regWrite = (enable) ? RegWrite : 1'b0;
 
 endmodule
