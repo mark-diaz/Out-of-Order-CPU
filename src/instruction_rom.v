@@ -7,7 +7,7 @@ module instruction_rom (
     integer i;
 
     initial begin
-        $readmemh("/Users/markdiaz/Documents/workspace/Out-of-Order-CPU/trace/final.txt", instruction_bytes);
+        $readmemh("/home/mark/Documents/workspace/Out-of-Order-CPU/trace/final.txt", instruction_bytes);
         for (i = 0; i < 256; i = i + 1) begin
             instruction_memory[i] = {
               	instruction_bytes[4*i+3],    // Most significant byte (MSB)

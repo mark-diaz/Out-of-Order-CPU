@@ -43,14 +43,12 @@ module cpu_top
 
     decode decode_unit (
         .instruction(instruction_fetch_pipelined),
+		.opcode(opcode),
         .rs1(rs1),
         .rs2(rs2),
         .rd(rd),
+		.funct3(funct3),
         .funct7(funct7),
-        .funct3(funct3),
-        .opcode(opcode),
-		.opcode(opcode),
-        .funct3(funct3),
         .is_load(is_load),
         .is_store(is_store),
         .is_byte(is_byte),

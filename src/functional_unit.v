@@ -1,15 +1,15 @@
 module functional_unit(
     input [138:0] issue_queue_entry,  // 139-bit instruction
     input enable,
-    output reg [31:0] result,         // ALU result
-    output reg zero_flag,             // Zero flag from ALU
-    output reg [5:0] dest_reg,        // Destination register
-    output reg [5:0] rob_index,        // ROB entry index
-    output reg [31:0] store_data,
-    output reg memWrite,
-    output reg memRead,
-    output reg memSize,
-    output reg regWrite
+    output [31:0] result,         // ALU result
+    output zero_flag,             // Zero flag from ALU
+    output [5:0] dest_reg,        // Destination register
+    output [5:0] rob_index,        // ROB entry index
+    output [31:0] store_data,
+    output memWrite,
+    output memRead,
+    output memSize,
+    output regWrite
 );
 
     // Extract fields from issue queue entry
